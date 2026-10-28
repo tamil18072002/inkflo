@@ -1,0 +1,54 @@
+name: Build InkFlow Notes APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download project repository
+        uses: actions/checkout@v4
+      - name: Extract uploaded project ZIP if present
+        run: |
+          if [ -f InkFlowNotes-cloud-build.zip ]; then
+            unzip -o InkFlowNotes-cloud-build.zip -d extracted
+            if [ -f extracted/settings.gradle.kts ]; then
+              cp -a extracted/. .
+            else
+              find extracted -name settings.gradle.kts -print -quit | grep -q . || { echo 'Could not find settings.gradle.kts in ZIP'; exit 1; }
+              ROOT=$(dirname "$(find extracted -name settings.gradle.kts -print -quit)")
+              cp -a "$ROOT"/. .
+            fi
+          fi
+          test -f settings.gradle.kts || { echo 'settings.gradle.kts is missing'; exit 1; }
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Install Android SDK packages
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Build debug APK
+        run: gradle --no-daemon assembleDebug
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: InkFlowNotes-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
